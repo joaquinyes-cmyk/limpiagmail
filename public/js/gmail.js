@@ -202,11 +202,24 @@ export class GmailClient {
     await this.request("POST", "/messages/batchModify", { body: { ids, addLabelIds, removeLabelIds } });
   }
 
+  /** Si un lote falla por un id que ya no existe, lo parte en mitades hasta aislarlo. */
+  async safeModify(ids, add, remove) {
+    try {
+      await this.batchModify(ids, add, remove);
+    } catch (e) {
+      if (ids.length > 1 && (e.status === 400 || e.status === 404)) {
+        const h = ids.length >> 1;
+        await this.safeModify(ids.slice(0, h), add, remove);
+        await this.safeModify(ids.slice(h), add, remove);
+      } else if (!(ids.length === 1 && (e.status === 400 || e.status === 404))) throw e;
+    }
+  }
+
   async trash(ids) {
-    return this.batchModify(ids, ["TRASH"], ["INBOX"]);
+    return this.safeModify(ids, ["TRASH"], ["INBOX"]);
   }
 
   async untrash(ids) {
-    return this.batchModify(ids, ["INBOX"], ["TRASH"]);
+    return this.safeModify(ids, ["INBOX"], ["TRASH"]);
   }
 }

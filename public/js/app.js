@@ -108,13 +108,14 @@ function addMessage(m, groups, stats) {
   const pp = parseSender(m.sender);
   let g = groups[pp.addr];
   if (!g) g = groups[pp.addr] = {
-    addr: pp.addr, name: pp.name, count: 0, bytes: 0, subs: [], unread: 0, newest: 0, oldest: Infinity,
+    addr: pp.addr, name: pp.name, count: 0, bytes: 0, ids: [], subs: [], unread: 0, newest: 0, oldest: Infinity,
     cats: { promo: 0, social: 0, updates: 0, primary: 0, forums: 0, main: 0 },
   };
   const t = Number(m.internalDate) || 0;
   if (t > g.newest) g.newest = t;
   if (t && t < g.oldest) g.oldest = t;
   g.count++;
+  g.ids.push(m.id);
   g.bytes += Number(m.sizeEstimate) || 0;
   g.cats[key]++;
   if (m.labelIds.includes("UNREAD")) g.unread++;
@@ -146,7 +147,7 @@ function publish(groups) {
     g.last = Math.max(0, Math.floor((now - g.newest) / 864e5));
     g.span = isFinite(g.oldest) ? Math.max(0, (g.newest - g.oldest) / 864e5) : 0;
     return g;
-  }).sort((a, b) => b.count - a.count).map(mkItem);
+  }).sort((a, b) => b.count - a.count).map((g, i) => { const it = mkItem(g, i); it.ids = g.ids; return it; });
   for (const it of items) {
     const o = prev.get(it.addr);
     if (!o) continue;
@@ -387,7 +388,7 @@ function sheetSub(s) {
   const n = sumC(s);
   if (!s.length) return "No hay remitentes seleccionados.";
   return state.mode === "gmail"
-    ? "Se moverán a la papelera de Gmail " + nf(n) + " correos de la bandeja de entrada de " + s.length + (s.length === 1 ? " remitente" : " remitentes") + ". La cifra es exacta: se contó ahora mismo en tu Gmail. Se omiten los destacados con estrella. Puedes recuperarlos durante 30 días."
+    ? "Se moverán a la papelera de Gmail " + nf(n) + " correos de la bandeja de entrada de " + s.length + (s.length === 1 ? " remitente" : " remitentes") + ". Son exactamente los correos leídos en el análisis de esos remitentes; los destacados con estrella no se tocan. Puedes recuperarlos durante 30 días."
     : "Se moverán " + nf(n) + " correos de " + s.length + (s.length === 1 ? " remitente" : " remitentes") + " a la papelera de ejemplo. No se toca ningún correo real.";
 }
 function renderSheet() {
@@ -410,26 +411,6 @@ async function reviewNow() {
 }
 
 async function openSheet() {
-  if (state.mode === "gmail") {
-    state.working = true; resetStop(); refreshControls(); renderBar();
-    const sel = selected();
-    let n = 0;
-    const r = await pool(sel, 3, async (it) => {
-      it.ids = await collectIds(it);
-      it.count = it.ids.length;
-      n++;
-      setProg("Contando los correos exactos de cada remitente: " + n + " de " + sel.length, n / sel.length);
-    });
-    $("prog").hidden = true; state.working = false;
-    if (r.bad || stop) {
-      setStatus("No pude contar todos los correos" + (stop ? "." : ": " + friendly(state.log.length ? { code: state.log[state.log.length - 1].code } : {})), "err");
-      sel.forEach((it) => { delete it.ids; });
-      renderAll();
-      return;
-    }
-    sel.forEach((it) => { if (!it.count) it.sel = false; });
-    renderList(); renderBar();
-  }
   lastFocus = document.activeElement;
   $("sheet-ok").checked = false; $("sheet-work").hidden = true; $("sheet-ask").hidden = false;
   renderSheet(); $("sheet").hidden = false; $("sheet-back").focus();
