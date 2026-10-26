@@ -52,7 +52,7 @@ function friendly(e) {
     case "rate_limited": return "Gmail pide ir más despacio. Espera un minuto y vuelve a intentarlo.";
     case "network": return "No hay conexión con Gmail. Revisa tu internet.";
     case "no_google": return "No se pudo cargar el inicio de sesión de Google. Desactiva bloqueadores de contenido y recarga.";
-    default: return "Error inesperado" + (e && e.status ? " (" + e.status + ")" : "") + ".";
+    default: return (e && e.message && e.message !== e.code ? e.message : "Error inesperado") + (e && e.status ? " [" + e.status + "]" : "") + ".";
   }
 }
 const fatal = (e) => e instanceof GmailError && FATAL_CODES.has(e.code);
@@ -145,7 +145,7 @@ async function scan() {
   const q = full ? "in:inbox" : "in:inbox (category:promotions OR category:social OR category:updates OR category:forums)";
   const groups = {};
   const stats = { threads: 0, skipped: 0, pages: 0, errors: 0, by: { promo: 0, social: 0, updates: 0, primary: 0, forums: 0, main: 0 }, more: [], depth: cap, scope: full ? "toda" : "promos" };
-  let failure = null, aborted = false, token = null, listed = 0, estimate = 0;
+  let failure = null, aborted = false, token = null, listed = 0, estimate = 0, lastErr = null;
 
   while (!stop) {
     let page;
@@ -156,12 +156,25 @@ async function scan() {
     if (listed + ids.length > cap) ids = ids.slice(0, cap - listed);
     let readInPage = 0;
     const total = Math.min(cap, Math.max(estimate, listed + ids.length));
-    const r = await pool(ids, 8, async (id) => {
-      addMessage(await gmail.getMessage(id), groups, stats);
+    const failedIds = [];
+    const readOne = async (id, final) => {
+      try {
+        addMessage(await gmail.getMessage(id), groups, stats);
+      } catch (e) {
+        if (e && e.status === 404) { stats.skipped++; return; } // el correo ya no existe
+        if (fatal(e)) throw e;
+        if (final) { logErr("leer " + id.slice(0, 6), e); stats.errors++; lastErr = e; } else failedIds.push(id);
+      }
       readInPage++;
       if (readInPage % 10 === 0) setProg("Leyendo la bandeja: " + nf(listed + readInPage) + " de unos " + nf(total) + " correos · " + nf(Object.keys(groups).length) + " remitentes", (listed + readInPage) / Math.max(1, total));
-    });
-    if (r.bad) { stats.errors += r.bad; failure = failure || new GmailError("api_error", "Algunos correos no se pudieron leer"); }
+    };
+    await pool(ids, 5, (id) => readOne(id, false));
+    if (failedIds.length && !stop) {
+      setProg("Reintentando " + failedIds.length + " correos que Gmail no entregó…", 0.99);
+      await new Promise((r) => setTimeout(r, 3000));
+      await pool(failedIds, 2, (id) => readOne(id, true));
+    }
+    if (stats.errors && !failure) failure = new GmailError("api_error", stats.errors + " correos no se pudieron leer" + (lastErr ? " (" + (lastErr.status || lastErr.code) + ": " + String(lastErr.message).slice(0, 80) + ")" : ""), lastErr && lastErr.status);
     listed += ids.length; stats.pages++;
     token = page.next;
     if (listed >= cap && token) { stats.more.push("la bandeja (límite de " + nf(cap) + " alcanzado)"); break; }

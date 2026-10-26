@@ -124,8 +124,8 @@ export class GmailClient {
         throw new GmailError("auth_expired", detail, 401);
       }
       const limited = res.status === 429 || (res.status === 403 && /rate|quota/i.test(detail));
-      if ((limited || res.status >= 500) && attempt < 4) {
-        await sleep(Math.min(8000, 600 * 2 ** attempt) + Math.random() * 300);
+      if ((limited || res.status >= 500) && attempt < 6) {
+        await sleep(Math.min(15000, 800 * 2 ** attempt) + Math.random() * 300);
         attempt++;
         continue;
       }
