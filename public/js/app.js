@@ -479,7 +479,7 @@ async function doDelete() {
   if (state.mode === "gmail") saveUndo(state.trashed);
   state.batch = { emails: moved.length, failed, items: doneItems, ids: moved };
   $("sheet").hidden = true;
-  if (leftover) setStatus("Moví " + nf(moved.length) + " correos, pero " + nf(leftover) + " siguen en la bandeja (llegaron mientras tanto). Vuelve a analizar para verlos.", "err");
+  if (leftover) setStatus("Moví " + nf(moved.length) + " correos. De esos mismos remitentes quedan " + nf(leftover) + " más en la bandeja que el análisis aún no había leído (o llegaron después). Pulsa «Analizar de nuevo» para verlos.", "err");
   else if (failed || wasStopped) setStatus((wasStopped ? "Detuve el proceso. " : "") + nf(moved.length) + " correos movidos" + (failed ? " y " + failed + " remitentes con error. Mira el informe." : "."), failed ? "err" : "");
   renderAll();
 }
