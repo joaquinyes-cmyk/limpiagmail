@@ -1,0 +1,12 @@
+{
+  "name": "limpia-gmail",
+  "version": "1.0.0",
+  "description": "Revisa tu bandeja de Gmail por remitentes y mueve a la papelera la publicidad, solo tras tu confirmación.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "start": "npx --yes http-server . -p 8080 -c-1"
+  }
+}

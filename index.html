@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Limpia Gmail</title>
+<meta name="description" content="Revisa tu bandeja de Gmail agrupada por remitentes y mueve a la papelera la publicidad que no quieres, solo después de que tú lo confirmes.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src https://gmail.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='6' width='28' height='20' rx='4' fill='%2313201D'/%3E%3Ccircle cx='25' cy='23' r='6' fill='%230E6B5B'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Instrument+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="6" width="28" height="20" rx="4" fill="var(--ink)"/><path d="M4 9l12 9 12-9" fill="none" stroke="var(--bg)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="25" cy="23" r="6" fill="var(--accent)"/><path d="M22.2 23l2 2 3.4-3.8" fill="none" stroke="var(--accent-ink)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Limpia Gmail
+    </div>
+    <div class="acct">
+      <span class="pill" id="mode">Bandeja de ejemplo</span>
+      <button class="btn" id="disconnect" type="button" hidden>Desconectar</button>
+      <button class="btn" id="reset" type="button">Volver al ejemplo</button>
+    </div>
+  </div>
+
+  <section class="summary" aria-live="polite">
+    <h1 id="headline"></h1>
+    <p id="lead"></p>
+    <div class="scan">
+      <button class="btn accent" id="scan" type="button">Conectar y analizar mi Gmail</button>
+      <button class="btn" id="stopscan" type="button" hidden>Detener análisis</button>
+      <label>Alcance
+        <select id="scope">
+          <option value="all" selected>Toda la bandeja de entrada</option>
+          <option value="promos">Solo promociones, redes y avisos</option>
+        </select>
+      </label>
+      <label>Profundidad
+        <select id="depth">
+          <option value="1">Rápida (hasta 250 correos)</option>
+          <option value="3" selected>Normal (hasta 650)</option>
+          <option value="6">Profunda (hasta 1.350)</option>
+        </select>
+      </label>
+    </div>
+    <div class="setup" id="setup" hidden></div>
+    <div class="prog" id="prog" hidden><div class="prog-t" id="prog-t"></div><div class="prog-bar"><span id="prog-fill"></span></div></div>
+    <div class="status" id="status" role="status" hidden></div>
+    <div class="stack" id="stack" role="img"></div>
+    <ul class="legend" id="legend"></ul>
+    <div class="trashline" id="trashline" hidden></div>
+  </section>
+
+  <section class="tools">
+    <div class="tabs" id="tabs" role="tablist" aria-label="Tipo de remitente"></div>
+    <div class="find">
+      <input type="search" id="q" placeholder="Buscar remitente o asunto" aria-label="Buscar remitente o asunto">
+      <select id="sort" aria-label="Ordenar">
+        <option value="count">Más correos primero</option>
+        <option value="recent">Más recientes primero</option>
+      </select>
+    </div>
+    <label class="allbox"><input type="checkbox" id="all"> Seleccionar todo lo que no se conserva en esta vista</label>
+  </section>
+
+  <ul class="list" id="list"></ul>
+
+  <div class="bar" id="bar"></div>
+
+  <details class="report" id="report">
+    <summary>Informe de diagnóstico</summary>
+    <p>Aquí queda lo que hizo el análisis, los remitentes que marques como mal clasificados y los errores. No incluye asuntos ni textos de tus correos.</p>
+    <textarea id="rep-text" readonly aria-label="Informe de diagnóstico"></textarea>
+    <div class="acts"><button class="btn" id="rep-copy" type="button">Copiar informe</button><span id="rep-msg" class="lbl" role="status"></span></div>
+  </details>
+
+  <p class="foot">Todo se ejecuta en tu navegador: no hay servidor ni se guardan tus correos. <a href="privacy.html">Privacidad</a></p>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+    <header>
+      <h2 id="sheet-title">Confirma qué se elimina</h2>
+      <p id="sheet-sub"></p>
+    </header>
+    <ul id="sheet-list"></ul>
+    <footer>
+      <div id="sheet-work" hidden>
+        <div class="prog" style="margin-top:0"><div class="prog-t" id="sheet-prog-t"></div><div class="prog-bar"><span id="sheet-prog-fill"></span></div></div>
+        <div class="acts" style="margin-top:12px"><button class="btn" id="sheet-stop" type="button">Detener</button></div>
+      </div>
+      <div id="sheet-ask">
+        <label class="ok"><input type="checkbox" id="sheet-ok"> <span>He revisado la lista de remitentes y quiero mover estos correos a la papelera.</span></label>
+        <div class="acts" style="margin-top:12px">
+          <button class="btn" id="sheet-back" type="button">Volver a la lista</button>
+          <button class="btn danger" id="sheet-go" type="button" disabled>Eliminar</button>
+        </div>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
