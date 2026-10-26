@@ -136,10 +136,30 @@ async function ensureConnected() {
   }
 }
 
+/** Convierte lo leído hasta ahora en la lista de remitentes, conservando lo que ya marcaste. */
+function publish(groups) {
+  const now = Date.now();
+  const prev = new Map(state.live ? state.items.map((i) => [i.addr, i]) : []);
+  const items = Object.values(groups).map((g) => {
+    g.last = Math.max(0, Math.floor((now - g.newest) / 864e5));
+    g.span = isFinite(g.oldest) ? Math.max(0, (g.newest - g.oldest) / 864e5) : 0;
+    return g;
+  }).sort((a, b) => b.count - a.count).map(mkItem);
+  for (const it of items) {
+    const o = prev.get(it.addr);
+    if (!o) continue;
+    it.sel = o.sel; it.flag = o.flag;
+    if (o.forced) { it.cat = "keep"; it.forced = true; it.sel = false; it.reasons = ["Marcado por ti como importante"]; }
+  }
+  if (!state.live) Object.assign(state, { mode: "gmail", tab: "todo", q: "", open: {}, batch: null, trashed: [], delStats: null });
+  state.items = items; state.live = true;
+  renderAll();
+}
+
 async function scan() {
   if (state.scanning || state.working) return;
   if (!(await ensureConnected())) { refreshControls(); return; }
-  state.scanning = true; stop = false; setStatus(""); refreshControls();
+  state.scanning = true; state.live = false; stop = false; setStatus(""); refreshControls();
   const cap = Number($("depth").value) || 10000;
   const full = $("scope").value === "all";
   const q = full ? "in:inbox" : "in:inbox (category:promotions OR category:social OR category:updates OR category:forums)";
@@ -176,6 +196,7 @@ async function scan() {
     }
     if (stats.errors && !failure) failure = new GmailError("api_error", stats.errors + " correos no se pudieron leer" + (lastErr ? " (" + (lastErr.status || lastErr.code) + ": " + String(lastErr.message).slice(0, 80) + ")" : ""), lastErr && lastErr.status);
     listed += ids.length; stats.pages++;
+    if (stats.threads) { state.stats = stats; publish(groups); }
     token = page.next;
     if (listed >= cap && token) { stats.more.push("la bandeja (límite de " + nf(cap) + " alcanzado)"); break; }
     if (!token) break;
@@ -190,15 +211,9 @@ async function scan() {
     refreshControls(); renderReport();
     return;
   }
-  const now = Date.now();
-  const items = Object.values(groups).map((g) => {
-    g.last = Math.max(0, Math.floor((now - g.newest) / 864e5));
-    g.span = isFinite(g.oldest) ? Math.max(0, (g.newest - g.oldest) / 864e5) : 0;
-    return g;
-  }).sort((a, b) => b.count - a.count).map(mkItem);
-  Object.assign(state, { mode: "gmail", items, tab: "todo", q: "", open: {}, batch: null, trashed: [], delStats: null });
-  $("q").value = "";
-  let msg = "Listo: " + nf(stats.threads) + " correos leídos, agrupados en " + nf(items.length) + " remitentes." + (stats.skipped ? " Omití " + nf(stats.skipped) + " con estrella o enviados por ti." : "");
+  publish(groups);
+  state.live = false;
+  let msg = "Listo: " + nf(stats.threads) + " correos leídos, agrupados en " + nf(state.items.length) + " remitentes." + (stats.skipped ? " Omití " + nf(stats.skipped) + " con estrella o enviados por ti." : "");
   if (stats.more.length) msg += " Quedan correos sin leer: sube la profundidad a «Completa» para revisarlos todos.";
   if (aborted) msg += " El análisis se detuvo antes de terminar.";
   if (failure) msg += " Una parte falló: " + friendly(failure);
@@ -316,7 +331,7 @@ function renderBar() {
   }
   bar.className = "bar";
   const prot = s.filter((i) => i.cat === "keep").length;
-  bar.innerHTML = '<div class="txt"><b class="num">' + s.length + "</b> " + (s.length === 1 ? "remitente" : "remitentes") + ' · <b class="num">' + nf(sumC(s)) + '</b> correos · <b class="num">' + mb(sumMB(s)) + " MB</b>" + (prot ? '<span class="warn">Incluye ' + prot + " " + (prot === 1 ? "remitente protegido" : "remitentes protegidos") + ". Revísalo antes de confirmar.</span>" : "") + '</div><button class="btn primary" type="button" id="review"' + (s.length && !state.working && !state.scanning ? "" : " disabled") + ">Revisar y eliminar</button>";
+  bar.innerHTML = '<div class="txt"><b class="num">' + s.length + "</b> " + (s.length === 1 ? "remitente" : "remitentes") + ' · <b class="num">' + nf(sumC(s)) + '</b> correos · <b class="num">' + mb(sumMB(s)) + " MB</b>" + (prot ? '<span class="warn">Incluye ' + prot + " " + (prot === 1 ? "remitente protegido" : "remitentes protegidos") + ". Revísalo antes de confirmar.</span>" : "") + '</div><button class="btn primary" type="button" id="review"' + (s.length && !state.working ? "" : " disabled") + ">Revisar y eliminar</button>";
 }
 function buildReport() {
   const L = [], st = state.stats, all = state.items;
@@ -366,6 +381,16 @@ function renderSheet() {
   $("sheet-go").disabled = !(s.length && $("sheet-ok").checked);
 }
 /** Cuenta los correos exactos de cada remitente seleccionado antes de pedir la confirmación. */
+/** Si el análisis sigue en marcha, lo detiene y revisa lo leído hasta ese momento. */
+async function reviewNow() {
+  if (state.scanning) {
+    stop = true;
+    setStatus("Detuve el análisis para que revises lo leído hasta ahora.");
+    while (state.scanning) await new Promise((r) => setTimeout(r, 100));
+  }
+  await openSheet();
+}
+
 async function openSheet() {
   if (state.mode === "gmail") {
     state.working = true; stop = false; refreshControls(); renderBar();
@@ -550,7 +575,7 @@ $("list").addEventListener("click", (e) => {
   state.batch = null; renderAll();
 });
 $("bar").addEventListener("click", (e) => {
-  if (e.target.id === "review") openSheet();
+  if (e.target.id === "review") reviewNow();
   if (e.target.id === "undo") undo();
 });
 $("trashline").addEventListener("click", (e) => {
