@@ -150,10 +150,10 @@ export function classify(g) {
     if (g.span >= 7 && total >= 3) r.push("Unos " + (total / (g.span / 7)).toFixed(1).replace(".", ",") + " por semana");
     else if (total >= 2) r.push(total + " correos en " + Math.max(1, Math.round(g.span)) + " días");
   }
-  // Lo que casi nunca abres (9 de cada 10 sin leer, con volumen) se propone para eliminar; tú confirmas la lista.
   const neverOpened = (cat === "news" || cat === "review") && total >= 8 && g.unread / total >= 0.9;
   if (neverOpened) r.push("Casi nunca lo abres (" + g.unread + " de " + total + " sin leer)");
-  return { cat, reasons: r, pre: cat === "ofertas" || cat === "social" || neverOpened };
+  // Se propone eliminar todo lo que no parece importante; el usuario revisa la lista y desmarca lo que quiera conservar.
+  return { cat, reasons: r, pre: cat !== "keep" };
 }
 
 export function mkItem(g, i) {

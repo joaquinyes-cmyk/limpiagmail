@@ -280,7 +280,7 @@ function renderSummary() {
   $("headline").textContent = junk > 0 ? "Tienes " + nf(junk) + " correos que probablemente no necesitas" : total > 0 ? "No quedan remitentes de publicidad por revisar" : "Tu bandeja está limpia";
   $("lead").textContent = state.mode === "demo"
     ? "Esto es una bandeja de ejemplo. Pulsa «Conectar y analizar mi Gmail» para revisar tu bandeja de entrada agrupada por remitentes. No se borra nada hasta que lo confirmes."
-    : "Revisa los remitentes de la lista y elige cuáles quieres vaciar. Todo va a la papelera de Gmail y no se borra nada hasta que lo confirmes.";
+    : "Marqué por adelantado todos los remitentes que no parecen importantes. Desmarca los que quieras conservar y pulsa «Revisar y eliminar». Todo va a la papelera de Gmail y no se borra nada hasta que lo confirmes.";
   let seg = "", leg = "";
   const desc = [];
   for (const k of ["ofertas", "social", "news", "review", "keep"]) {
@@ -556,6 +556,8 @@ $("tabs").addEventListener("click", (e) => {
 });
 $("q").addEventListener("input", (e) => { state.q = e.target.value; renderList(); });
 $("sort").addEventListener("change", (e) => { state.sort = e.target.value; renderList(); });
+$("mark-none").addEventListener("click", () => { inbox().forEach((i) => { i.sel = false; }); state.batch = null; renderList(); renderBar(); });
+$("mark-all").addEventListener("click", () => { inbox().forEach((i) => { i.sel = i.cat !== "keep"; }); state.batch = null; renderList(); renderBar(); });
 $("all").addEventListener("change", (e) => {
   const on = e.target.checked;
   visible().forEach((i) => { if (i.cat !== "keep") i.sel = on; });

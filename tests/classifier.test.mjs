@@ -24,10 +24,8 @@ test("bancos y contactos se conservan aunque Gmail diga promoción", () => {
   assert.equal(classify(g({ addr: "a@b.com", name: "Mamá", contact: true, cats: { promo: 10 } })).cat, "keep");
 });
 
-test("lo que se conserva o se revisa nunca viene marcado", () => {
-  for (const it of demoGroups().map(mkItem)) {
-    if (it.cat === "keep" || it.cat === "review" || it.cat === "news") assert.equal(it.sel, false, it.addr);
-  }
+test("solo lo protegido queda sin marcar; todo lo demás se propone", () => {
+  for (const it of demoGroups().map(mkItem)) assert.equal(it.sel, it.cat !== "keep", it.addr);
 });
 
 test("empleo y notificaciones van a revisar", () => {
