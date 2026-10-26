@@ -136,6 +136,11 @@ export function classify(g) {
     cat = "news";
     r.push("Tiene enlace de baja en la bandeja principal");
   }
+  // Boletines que llegan con enlace de baja: no son avisos importantes aunque Gmail los ponga en Actualizaciones.
+  if (cat === "review" && g.unsubN && g.unsubN / total >= 0.5 && !RX.job.test(id)) {
+    cat = "news";
+    r.push("Casi todos traen enlace de baja");
+  }
   if (cat !== "keep") {
     const ph = hit(RX.promo);
     if (ph > 0 && cat === "ofertas") r.push(ph + " de " + t + " asuntos con ofertas");
@@ -145,7 +150,10 @@ export function classify(g) {
     if (g.span >= 7 && total >= 3) r.push("Unos " + (total / (g.span / 7)).toFixed(1).replace(".", ",") + " por semana");
     else if (total >= 2) r.push(total + " correos en " + Math.max(1, Math.round(g.span)) + " días");
   }
-  return { cat, reasons: r, pre: cat === "ofertas" || cat === "social" };
+  // Lo que casi nunca abres (9 de cada 10 sin leer, con volumen) se propone para eliminar; tú confirmas la lista.
+  const neverOpened = (cat === "news" || cat === "review") && total >= 8 && g.unread / total >= 0.9;
+  if (neverOpened) r.push("Casi nunca lo abres (" + g.unread + " de " + total + " sin leer)");
+  return { cat, reasons: r, pre: cat === "ofertas" || cat === "social" || neverOpened };
 }
 
 export function mkItem(g, i) {

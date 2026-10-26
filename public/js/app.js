@@ -108,7 +108,7 @@ function addMessage(m, groups, stats) {
   const pp = parseSender(m.sender);
   let g = groups[pp.addr];
   if (!g) g = groups[pp.addr] = {
-    addr: pp.addr, name: pp.name, count: 0, bytes: 0, ids: [], subs: [], unread: 0, newest: 0, oldest: Infinity,
+    addr: pp.addr, name: pp.name, count: 0, bytes: 0, ids: [], subs: [], unread: 0, unsubN: 0, newest: 0, oldest: Infinity,
     cats: { promo: 0, social: 0, updates: 0, primary: 0, forums: 0, main: 0 },
   };
   const t = Number(m.internalDate) || 0;
@@ -116,6 +116,7 @@ function addMessage(m, groups, stats) {
   if (t && t < g.oldest) g.oldest = t;
   g.count++;
   g.ids.push(m.id);
+  if (m.unsub) g.unsubN++;
   g.bytes += Number(m.sizeEstimate) || 0;
   g.cats[key]++;
   if (m.labelIds.includes("UNREAD")) g.unread++;
@@ -350,6 +351,10 @@ function renderBar() {
   }
   bar.className = "bar";
   const prot = s.filter((i) => i.cat === "keep").length;
+  if (!s.length && state.mode === "gmail") {
+    bar.innerHTML = '<div class="txt">No hay ningún remitente marcado. Marca casillas en la lista, o abre una pestaña (por ejemplo «Para revisar») y usa «Seleccionar todo lo que no se conserva en esta vista».</div><button class="btn primary" type="button" id="review" disabled>Revisar y eliminar</button>';
+    return;
+  }
   bar.innerHTML = '<div class="txt"><b class="num">' + s.length + "</b> " + (s.length === 1 ? "remitente" : "remitentes") + ' · <b class="num">' + nf(sumC(s)) + '</b> correos · <b class="num">' + mb(sumMB(s)) + " MB</b>" + (prot ? '<span class="warn">Incluye ' + prot + " " + (prot === 1 ? "remitente protegido" : "remitentes protegidos") + ". Revísalo antes de confirmar.</span>" : "") + '</div><button class="btn primary" type="button" id="review"' + (s.length && !state.working ? "" : " disabled") + ">Revisar y eliminar</button>";
 }
 function buildReport() {

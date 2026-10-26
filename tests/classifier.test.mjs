@@ -61,3 +61,15 @@ test("la demo clasifica sin errores", () => {
   assert.ok(items.some((i) => i.cat === "ofertas"));
   assert.ok(items.some((i) => i.cat === "keep"));
 });
+
+test("lo que casi nunca se abre, con volumen, viene marcado; bancos no", () => {
+  const a = classify(g({ addr: "admin@hobbiecode.com", name: "HOBBIECODE", count: 192, unread: 182, subs: ["El Capítulo 1 se estrena"], cats: { updates: 192 } }));
+  assert.equal(a.pre, true);
+  const b = classify(g({ addr: "avisos@bancocosta.es", name: "Banco Costa", count: 50, unread: 50, cats: { updates: 50 } }));
+  assert.equal(b.pre, false);
+});
+
+test("actualizaciones con enlace de baja pasan a boletines", () => {
+  const c = classify(g({ addr: "x@club.com", name: "Club", count: 10, unread: 2, unsubN: 9, cats: { updates: 10 } }));
+  assert.equal(c.cat, "news");
+});
