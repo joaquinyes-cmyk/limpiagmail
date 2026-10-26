@@ -18,7 +18,7 @@ La app necesita un ID de cliente de Google. Es gratis y no es un secreto.
 4. **Credenciales → Crear credenciales → ID de cliente de OAuth**, tipo **Aplicación web**. En *Orígenes autorizados de JavaScript* añade:
    - `http://localhost:8080` (para probar en local)
    - `https://TU_USUARIO.github.io` (tu GitHub Pages; solo el origen, sin ruta)
-5. Copia el ID de cliente en `js/config.js` (`CLIENT_ID`).
+5. Copia el ID de cliente en `public/js/config.js` (`CLIENT_ID`).
 
 > **Sobre el permiso:** `gmail.modify` es un ámbito restringido de Google. Para uso personal, en modo *Pruebas* con tus usuarios de prueba, funciona sin verificación (Google muestra un aviso de «app no verificada» que puedes aceptar; los permisos de prueba caducan a los 7 días y hay que volver a autorizar). Para abrirla a cualquier persona Google exige verificación de la app y una evaluación de seguridad.
 
@@ -28,6 +28,10 @@ La app necesita un ID de cliente de Google. Es gratis y no es un secreto.
 npm start        # sirve en http://localhost:8080
 npm test         # tests del clasificador
 ```
+
+## Publicar en Cloudflare
+
+En Cloudflare: Workers y Pages → conectar el repo. Deja el comando de compilación vacío y el de despliegue por defecto (`npx wrangler deploy`). `wrangler.jsonc` publica solo la carpeta `public/`.
 
 ## Publicar en GitHub Pages
 
@@ -44,15 +48,16 @@ En el repositorio: **Settings → Pages → Source: GitHub Actions**. Cada push 
 ## Estructura
 
 ```
-index.html        interfaz
-styles.css        estilos (tema claro/oscuro)
-privacy.html      política de privacidad
-js/config.js      ID de cliente y ámbito
-js/classifier.js  reglas de clasificación (puras, con tests)
-js/gmail.js       cliente de la API de Gmail
-js/demo.js        bandeja de ejemplo
-js/app.js         interfaz y flujo
-tests/            pruebas con node:test
+public/index.html        interfaz
+public/styles.css        estilos (tema claro/oscuro)
+public/privacy.html      política de privacidad
+public/js/config.js      ID de cliente y ámbito
+public/js/classifier.js  reglas de clasificación (puras, con tests)
+public/js/gmail.js       cliente de la API de Gmail
+public/js/demo.js        bandeja de ejemplo
+public/js/app.js         interfaz y flujo
+tests/                   pruebas con node:test
+wrangler.jsonc           despliegue en Cloudflare (publica solo public/)
 ```
 
 ## Cómo clasifica

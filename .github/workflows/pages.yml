@@ -35,7 +35,7 @@ jobs:
       - name: Preparar sitio
         run: |
           mkdir _site
-          cp -r index.html privacy.html styles.css js _site/
+          cp -r public/. _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

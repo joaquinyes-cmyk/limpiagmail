@@ -220,7 +220,7 @@ function renderSetup() {
   const el = $("setup");
   if (configured) { el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = "Falta configurar el ID de cliente de Google. Abre <code>js/config.js</code> y sigue los pasos del README. Mientras tanto puedes probar la app con la bandeja de ejemplo.";
+  el.innerHTML = "Falta configurar el ID de cliente de Google. Abre <code>public/js/config.js</code> y sigue los pasos del README. Mientras tanto puedes probar la app con la bandeja de ejemplo.";
 }
 function refreshControls() {
   const busy = state.scanning || state.working;

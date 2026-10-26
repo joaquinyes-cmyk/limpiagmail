@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { classify, parseSender, decodeWords, mkItem } from "../js/classifier.js";
-import { demoGroups } from "../js/demo.js";
-import { normalizeThread } from "../js/gmail.js";
+import { classify, parseSender, decodeWords, mkItem } from "../public/js/classifier.js";
+import { demoGroups } from "../public/js/demo.js";
+import { normalizeThread } from "../public/js/gmail.js";
 
 const base = { count: 10, span: 30, unread: 0, bytes: 0, subs: [], cats: { promo: 0, social: 0, updates: 0, primary: 0, forums: 0, main: 0 } };
 const g = (o) => ({ ...base, ...o, cats: { ...base.cats, ...(o.cats || {}) } });
