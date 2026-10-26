@@ -43,6 +43,20 @@ export class GmailClient {
     this.scope = scope;
     this.token = null;
     this.expires = 0;
+    this.aborted = false; // se activa al pulsar Detener: corta esperas y peticiones
+    this.pauseUntil = 0; // pausa común cuando Gmail pide ir más despacio
+  }
+
+  abort() { this.aborted = true; }
+  resume() { this.aborted = false; }
+
+  /** Espera en tramos cortos para poder cancelar al instante. */
+  async wait(ms) {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      if (this.aborted) throw new GmailError("cancelled", "Cancelado");
+      await sleep(Math.min(200, end - Date.now()));
+    }
   }
 
   async waitForGoogle(ms = 10000) {
@@ -98,19 +112,23 @@ export class GmailClient {
     }
     let attempt = 0;
     for (;;) {
+      if (this.aborted) throw new GmailError("cancelled", "Cancelado");
+      if (this.pauseUntil > Date.now()) await this.wait(this.pauseUntil - Date.now());
       let res;
       try {
         res = await fetch(url, {
           method,
           headers: { Authorization: "Bearer " + this.token, ...(body ? { "Content-Type": "application/json" } : {}) },
           body: body ? JSON.stringify(body) : undefined,
+          signal: AbortSignal.timeout(30000),
         });
       } catch {
-        if (attempt < 2) {
-          await sleep(500 * 2 ** attempt++);
+        if (this.aborted) throw new GmailError("cancelled", "Cancelado");
+        if (attempt < 3) {
+          await this.wait(700 * 2 ** attempt++);
           continue;
         }
-        throw new GmailError("network", "Sin conexión con Gmail");
+        throw new GmailError("network", "Gmail no respondió (sin conexión o demasiado lento)");
       }
       if (res.ok) return res.status === 204 ? {} : res.json();
       let detail = "";
@@ -124,8 +142,11 @@ export class GmailClient {
         throw new GmailError("auth_expired", detail, 401);
       }
       const limited = res.status === 429 || (res.status === 403 && /rate|quota/i.test(detail));
-      if ((limited || res.status >= 500) && attempt < 6) {
-        await sleep(Math.min(15000, 800 * 2 ** attempt) + Math.random() * 300);
+      if ((limited || res.status >= 500) && attempt < 2) {
+        const ra = Number(res.headers.get("retry-after")) * 1000;
+        const delay = Math.min(20000, ra > 0 ? ra : 1000 * 2 ** attempt) + Math.random() * 400;
+        // Todas las peticiones esperan juntas, en vez de insistir cada una por su cuenta.
+        if (this.pauseUntil < Date.now()) this.pauseUntil = Date.now() + delay; // las pausas no se acumulan
         attempt++;
         continue;
       }

@@ -8,6 +8,8 @@ const configured = /^[0-9]+-.+\.apps\.googleusercontent\.com$/.test(CONFIG.CLIEN
 const STORE = "limpia-gmail:ultima-limpieza";
 
 let stop = false;
+const resetStop = () => { stop = false; gmail.resume(); };
+const haltAll = () => { stop = true; gmail.abort(); };
 const state = {
   mode: "demo", items: [], tab: "todo", q: "", sort: "count", open: {},
   batch: null, scanning: false, working: false, stats: null, log: [], trashed: [], delStats: null,
@@ -63,7 +65,7 @@ async function pool(list, limit, fn) {
     while (i < list.length && !stop) {
       const k = i++;
       try { await fn(list[k], k); ok++; }
-      catch (e) { bad++; logErr("tarea", e); if (fatal(e)) stop = true; }
+      catch (e) { bad++; if (!(e && e.code === "cancelled")) logErr("tarea", e); if (fatal(e)) haltAll(); }
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
@@ -156,10 +158,10 @@ function publish(groups) {
   renderAll();
 }
 
-async function scan() {
+async function scanInner() {
   if (state.scanning || state.working) return;
   if (!(await ensureConnected())) { refreshControls(); return; }
-  state.scanning = true; state.live = false; stop = false; setStatus(""); refreshControls();
+  state.scanning = true; state.live = false; resetStop(); setStatus(""); refreshControls();
   const cap = Number($("depth").value) || 10000;
   const full = $("scope").value === "all";
   const q = full ? "in:inbox" : "in:inbox (category:promotions OR category:social OR category:updates OR category:forums)";
@@ -177,10 +179,13 @@ async function scan() {
     let readInPage = 0;
     const total = Math.min(cap, Math.max(estimate, listed + ids.length));
     const failedIds = [];
+    let deadline = Infinity;
     const readOne = async (id, final) => {
       try {
+        if (final && Date.now() > deadline) throw new GmailError("rate_limited", "Gmail sigue pidiendo ir más despacio");
         addMessage(await gmail.getMessage(id), groups, stats);
       } catch (e) {
+        if (stop || (e && e.code === "cancelled")) return;
         if (e && e.status === 404) { stats.skipped++; return; } // el correo ya no existe
         if (fatal(e)) throw e;
         if (final) { logErr("leer " + id.slice(0, 6), e); stats.errors++; lastErr = e; } else failedIds.push(id);
@@ -192,6 +197,7 @@ async function scan() {
     if (failedIds.length && !stop) {
       setProg("Reintentando " + failedIds.length + " correos que Gmail no entregó…", 0.99);
       await new Promise((r) => setTimeout(r, 3000));
+      deadline = Date.now() + 45000; // no insistir más de 45 s con los que Gmail sigue rechazando
       await pool(failedIds, 2, (id) => readOne(id, true));
     }
     if (stats.errors && !failure) failure = new GmailError("api_error", stats.errors + " correos no se pudieron leer" + (lastErr ? " (" + (lastErr.status || lastErr.code) + ": " + String(lastErr.message).slice(0, 80) + ")" : ""), lastErr && lastErr.status);
@@ -219,6 +225,18 @@ async function scan() {
   if (failure) msg += " Una parte falló: " + friendly(failure);
   setStatus(msg, failure ? "err" : "ok");
   renderAll();
+}
+
+async function scan() {
+  try {
+    await scanInner();
+  } catch (e) {
+    logErr("analizar", e);
+    state.scanning = false; state.live = false;
+    $("prog").hidden = true;
+    setStatus("El análisis se interrumpió: " + friendly(e) + " Lo leído hasta ahora sigue en la lista.", "err");
+    renderAll();
+  }
 }
 
 /* ---- Cálculos ---- */
@@ -384,7 +402,7 @@ function renderSheet() {
 /** Si el análisis sigue en marcha, lo detiene y revisa lo leído hasta ese momento. */
 async function reviewNow() {
   if (state.scanning) {
-    stop = true;
+    haltAll();
     setStatus("Detuve el análisis para que revises lo leído hasta ahora.");
     while (state.scanning) await new Promise((r) => setTimeout(r, 100));
   }
@@ -393,7 +411,7 @@ async function reviewNow() {
 
 async function openSheet() {
   if (state.mode === "gmail") {
-    state.working = true; stop = false; refreshControls(); renderBar();
+    state.working = true; resetStop(); refreshControls(); renderBar();
     const sel = selected();
     let n = 0;
     const r = await pool(sel, 3, async (it) => {
@@ -449,7 +467,7 @@ async function moveIds(ids, toTrash) {
 async function doDelete() {
   const sel = selected();
   if (!sel.length || state.working) return;
-  state.working = true; stop = false; refreshControls();
+  state.working = true; resetStop(); refreshControls();
   $("sheet-ask").hidden = true; $("sheet-work").hidden = false;
   let moved = [], failed = 0, leftover = 0;
   const doneItems = [];
@@ -470,7 +488,7 @@ async function doDelete() {
       doneItems.push(it.id);
     } catch (e) {
       logErr("mover " + it.addr, e); failed++;
-      if (fatal(e)) { stop = true; setStatus(friendly(e), "err"); }
+      if (fatal(e)) { haltAll(); setStatus(friendly(e), "err"); }
     }
   }
   const wasStopped = stop;
@@ -487,7 +505,7 @@ async function doDelete() {
 async function undo() {
   if (!state.batch || state.working) return;
   const b = state.batch;
-  state.working = true; stop = false; refreshControls(); renderBar();
+  state.working = true; resetStop(); refreshControls(); renderBar();
   setProg("Restaurando " + nf(b.ids.length) + " correos…", 0.05);
   try {
     await moveIds(b.ids, false);
@@ -508,7 +526,7 @@ async function restoreAll() {
   if (state.working) return;
   const ids = state.trashed.slice();
   if (!ids.length) { trash().forEach((i) => { i.status = "inbox"; i.sel = false; }); state.batch = null; renderAll(); return; }
-  state.working = true; stop = false; refreshControls();
+  state.working = true; resetStop(); refreshControls();
   setProg("Restaurando " + nf(ids.length) + " correos…", 0.05);
   try {
     await moveIds(ids, false);
@@ -525,7 +543,7 @@ async function restoreAll() {
 async function restoreSaved() {
   const ids = loadUndo();
   if (!ids.length || state.working) return;
-  state.working = true; refreshControls();
+  state.working = true; resetStop(); refreshControls();
   setProg("Restaurando " + nf(ids.length) + " correos de la limpieza anterior…", 0.05);
   try {
     await gmail.untrash(ids.slice(0, 1000));
@@ -542,7 +560,7 @@ async function restoreSaved() {
 
 /* ---- Eventos ---- */
 $("scan").addEventListener("click", scan);
-$("stopscan").addEventListener("click", () => { stop = true; });
+$("stopscan").addEventListener("click", () => { haltAll(); });
 $("disconnect").addEventListener("click", () => {
   gmail.disconnect(); buildDemo(); setStatus("Sesión de Google cerrada. Se revocó el acceso de esta página.", "ok"); renderAll();
 });
@@ -594,7 +612,7 @@ $("sheet-list").addEventListener("change", (e) => {
 });
 $("sheet-back").addEventListener("click", closeSheet);
 $("sheet-go").addEventListener("click", doDelete);
-$("sheet-stop").addEventListener("click", () => { stop = true; $("sheet-prog-t").textContent = "Deteniendo…"; });
+$("sheet-stop").addEventListener("click", () => { haltAll(); $("sheet-prog-t").textContent = "Deteniendo…"; });
 $("sheet").addEventListener("click", (e) => { if (e.target.id === "sheet") closeSheet(); });
 $("report").addEventListener("toggle", renderReport);
 $("rep-copy").addEventListener("click", () => {
