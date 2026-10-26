@@ -156,7 +156,23 @@ export class GmailClient {
   /** Lista ids de mensajes (con su hilo) que cumplen la búsqueda. */
   async listMessages(q, pageToken, maxResults = 500) {
     const r = await this.request("GET", "/messages", { params: { q, maxResults, pageToken } });
-    return { messages: r.messages || [], next: r.nextPageToken || null };
+    return { messages: r.messages || [], next: r.nextPageToken || null, estimate: r.resultSizeEstimate || 0 };
+  }
+
+  /** Cabeceras de un mensaje (remitente, asunto, enlace de baja), sin descargar el cuerpo. */
+  async getMessage(id) {
+    const m = await this.request("GET", "/messages/" + encodeURIComponent(id), {
+      params: { format: "metadata", metadataHeaders: ["From", "Subject", "List-Unsubscribe"] },
+    });
+    return {
+      id: m.id,
+      sender: header(m, "From"),
+      subject: decodeWords(header(m, "Subject")),
+      unsub: !!header(m, "List-Unsubscribe"),
+      internalDate: m.internalDate,
+      sizeEstimate: m.sizeEstimate,
+      labelIds: m.labelIds || [],
+    };
   }
 
   /** Cambia etiquetas de hasta 1000 mensajes a la vez. */
